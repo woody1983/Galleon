@@ -8,10 +8,12 @@ import { useCoinDrop } from "@/hooks/use-coin-drop";
 import { useTodayTransactions, useQuickAdd, useParseInput } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Transaction, TransactionCategory } from "@/types/transaction";
 import { getCategoryConfig } from "@/lib/constants";
 import type { ParseResult } from "@/services/parser/localParser";
+import { QUICK_TAGS, type BrandConfig, type QuickTagConfig } from "@/lib/brands";
+import { BrandSelector } from "@/components/galleon/brand-selector";
 
 // ─── Category icon with emoji ──────────────────────────────────────────────────
 const CategoryIcon = ({ category }: { category: TransactionCategory }) => {
@@ -26,8 +28,8 @@ const CategoryIcon = ({ category }: { category: TransactionCategory }) => {
 // ─── Transaction Card ──────────────────────────────────────────────────────────
 function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
   // Truncate merchant name if too long (>20 chars)
-  const displayMerchant = tx.merchant.length > 20 
-    ? tx.merchant.slice(0, 20) + "..." 
+  const displayMerchant = tx.merchant.length > 20
+    ? tx.merchant.slice(0, 20) + "..."
     : tx.merchant;
 
   return (
@@ -45,6 +47,11 @@ function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
           <h4 className="font-bold text-ink-primary dark:text-foreground">{displayMerchant}</h4>
           <p className="text-xs text-ink-tertiary flex items-center gap-2 mt-1">
             {tx.date} · {tx.category}
+            {tx.subCategory && (
+              <span className="text-[10px] bg-galleon-gold/10 text-galleon-gold-dark px-1.5 py-0.5 rounded font-medium">
+                {tx.subCategory}
+              </span>
+            )}
             {tx.needsReview && (
               <span className="text-[10px] bg-spell-danger/10 text-spell-danger px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">
                 Review
@@ -69,13 +76,13 @@ function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
 }
 
 // ─── Parse Preview Card ────────────────────────────────────────────────────────
-function ParsePreview({ 
-  parsed, 
-  onConfirm, 
-  onCancel 
-}: { 
-  parsed: ParseResult; 
-  onConfirm: () => void; 
+function ParsePreview({
+  parsed,
+  onConfirm,
+  onCancel
+}: {
+  parsed: ParseResult;
+  onConfirm: () => void;
   onCancel: () => void;
 }) {
   const config = parsed.category ? getCategoryConfig(parsed.category) : null;
@@ -95,7 +102,7 @@ function ParsePreview({
           </span>
         )}
       </div>
-      
+
       <div className="flex items-center gap-4 mb-4">
         {config && (
           <div className="w-10 h-10 flex items-center justify-center rounded-full bg-background border border-border">
@@ -128,7 +135,7 @@ function ParsePreview({
       </div>
 
       <div className="flex gap-2">
-        <Button 
+        <Button
           onClick={onConfirm}
           size="sm"
           className="flex-1 bg-galleon-gold hover:bg-galleon-gold-dark text-white rounded-full"
@@ -136,7 +143,7 @@ function ParsePreview({
           <Check className="h-4 w-4 mr-1" />
           Confirm
         </Button>
-        <Button 
+        <Button
           onClick={onCancel}
           variant="outline"
           size="sm"
@@ -151,13 +158,13 @@ function ParsePreview({
 }
 
 // ─── Daily Summary Card ────────────────────────────────────────────────────────
-function DailySummary({ 
-  income, 
-  expense, 
-  net 
-}: { 
-  income: number; 
-  expense: number; 
+function DailySummary({
+  income,
+  expense,
+  net
+}: {
+  income: number;
+  expense: number;
   net: number;
 }) {
   return (
@@ -192,10 +199,13 @@ export default function TodayPage() {
   const [input, setInput] = useState("");
   const [preview, setPreview] = useState<ParseResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedBrand, setSelectedBrand] = useState<BrandConfig | null>(null);
+  const [expandedTag, setExpandedTag] = useState<string | null>(null);
   const { isOpen, amount, trigger, close } = useCoinDrop();
   const { transactions, total, isLoading, income, expense } = useTodayTransactions();
-  const { quickAdd } = useQuickAdd();
+  const { quickAdd, quickAddWithBrand } = useQuickAdd();
   const { parseInput } = useParseInput();
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Parse input on change (debounced)
   useEffect(() => {
@@ -212,8 +222,34 @@ export default function TodayPage() {
   }, [input, parseInput]);
 
   const handleConfirm = async () => {
-    if (!preview || isSubmitting) return;
-    
+    if (isSubmitting) return;
+
+    // Brand-based submission
+    if (selectedBrand) {
+      const amountMatch = input.match(/\d+(\.\d+)?/);
+      const parsedAmount = amountMatch ? parseFloat(amountMatch[0]) : 0;
+      if (parsedAmount <= 0) return;
+
+      setIsSubmitting(true);
+      try {
+        const id = await quickAddWithBrand({
+          amount: parsedAmount,
+          merchant: selectedBrand.name,
+          category: selectedBrand.category,
+          subCategory: selectedBrand.subCategory,
+        });
+        if (id) trigger(parsedAmount);
+        setInput("");
+        setPreview(null);
+        setSelectedBrand(null);
+      } finally {
+        setIsSubmitting(false);
+      }
+      return;
+    }
+
+    // NLP-based submission
+    if (!preview) return;
     setIsSubmitting(true);
     try {
       const id = await quickAdd(input);
@@ -230,20 +266,45 @@ export default function TodayPage() {
   const handleCancel = () => {
     setPreview(null);
     setInput("");
+    setSelectedBrand(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !preview) return;
-    await handleConfirm();
+    if (!input.trim()) return;
+    if (selectedBrand || preview) {
+      await handleConfirm();
+    }
+  };
+
+  // Handle brand selection from the brand selector
+  const handleBrandSelect = (brand: BrandConfig) => {
+    setSelectedBrand(brand);
+    setExpandedTag(null);
+    setInput(""); // Clear for amount entry
+    // Focus the input for amount entry
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
+  // Handle quick tag click
+  const handleTagClick = (tag: QuickTagConfig) => {
+    if (tag.brands && tag.brands.length > 0) {
+      // Toggle brand expansion
+      setExpandedTag(expandedTag === tag.id ? null : tag.id);
+    } else {
+      // Simple tag — populate input directly
+      setInput(tag.label);
+      setExpandedTag(null);
+      setSelectedBrand(null);
+    }
   };
 
   // Get today's date formatted
   const today = new Date();
-  const dateStr = today.toLocaleDateString("en-US", { 
-    weekday: "short", 
-    month: "short", 
-    day: "numeric" 
+  const dateStr = today.toLocaleDateString("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric"
   });
 
   return (
@@ -281,17 +342,59 @@ export default function TodayPage() {
             <div className="absolute -inset-0.5 bg-gradient-to-r from-galleon-gold/20 to-galleon-gold-dark/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-1000 group-focus-within:opacity-100" />
             <div className="relative flex flex-col gap-4 p-4 bg-card border border-border rounded-xl shadow-sm">
               <Input
+                ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="今天花了什么？"
+                placeholder={selectedBrand ? `${selectedBrand.name} 消费金额...` : "今天花了什么？"}
                 className="h-12 border-none shadow-none text-xl font-body bg-transparent focus-visible:ring-0 px-2"
               />
-              
-              {/* Parse Preview */}
+
+              {/* Parse Preview or Brand Preview */}
               <AnimatePresence>
-                {preview && (
-                  <ParsePreview 
-                    parsed={preview} 
+                {selectedBrand && input.match(/\d/) && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="mt-4 p-4 bg-galleon-gold/5 border border-galleon-gold/20 rounded-xl"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs font-mono uppercase tracking-wider text-galleon-gold">Brand Quick-Add</span>
+                    </div>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-10 h-10 flex items-center justify-center rounded-full bg-background border border-border">
+                        <span className="text-xl">{selectedBrand.logo}</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-ink-primary">{selectedBrand.name}</span>
+                          <span className="text-xs text-ink-tertiary">·</span>
+                          <span className="text-xs text-ink-tertiary">{selectedBrand.category}</span>
+                          <span className="text-[10px] bg-galleon-gold/10 text-galleon-gold-dark px-1.5 py-0.5 rounded font-medium">
+                            {selectedBrand.subCategory}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="font-mono font-bold text-spell-danger">
+                            -{(parseFloat(input.match(/\d+(\.\d+)?/)?.[0] || "0")).toFixed(0)} ¥
+                          </span>
+                          <span className="text-xs text-ink-tertiary">Confidence: 100%</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={handleConfirm} size="sm" className="flex-1 bg-galleon-gold hover:bg-galleon-gold-dark text-white rounded-full">
+                        <Check className="h-4 w-4 mr-1" /> Confirm
+                      </Button>
+                      <Button onClick={handleCancel} variant="outline" size="sm" className="rounded-full">
+                        <X className="h-4 w-4 mr-1" /> Cancel
+                      </Button>
+                    </div>
+                  </motion.div>
+                )}
+                {!selectedBrand && preview && (
+                  <ParsePreview
+                    parsed={preview}
                     onConfirm={handleConfirm}
                     onCancel={handleCancel}
                   />
@@ -310,7 +413,7 @@ export default function TodayPage() {
                 <Button
                   type="submit"
                   size="sm"
-                  disabled={!preview || isSubmitting}
+                  disabled={(!preview && !selectedBrand) || isSubmitting}
                   className="bg-ink-primary text-parchment hover:bg-ink-secondary dark:bg-foreground dark:text-midnight rounded-full px-6 py-5 transition-all active:scale-95 disabled:opacity-50"
                 >
                   <Zap className="h-4 w-4 mr-2 fill-current" />
@@ -321,17 +424,33 @@ export default function TodayPage() {
           </form>
         </section>
 
-        {/* Quick Tags */}
-        <section className="flex flex-wrap gap-2 mb-16 justify-center opacity-60 hover:opacity-100 transition-opacity">
-          {["☕ 咖啡", "🚕 打车", "🍔 午餐", "🛍️ 购物"].map((tag) => (
-            <button
-              key={tag}
-              onClick={() => setInput(tag)}
-              className="px-4 py-1.5 rounded-full border border-border text-[11px] font-medium uppercase tracking-wider hover:bg-ink-primary hover:text-parchment transition-all duration-300"
-            >
-              {tag}
-            </button>
-          ))}
+        {/* Quick Tags with Brand Expansion */}
+        <section className="mb-16">
+          <div className="flex flex-wrap items-center gap-2 justify-center opacity-60 hover:opacity-100 transition-opacity">
+            {QUICK_TAGS.map((tag) => (
+              <div key={tag.id} className="flex items-center gap-2">
+                <button
+                  onClick={() => handleTagClick(tag)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full border text-[11px] font-medium uppercase tracking-wider transition-all duration-300",
+                    expandedTag === tag.id
+                      ? "bg-ink-primary text-parchment border-ink-primary"
+                      : "border-border hover:bg-ink-primary hover:text-parchment"
+                  )}
+                >
+                  {tag.label}
+                </button>
+                {tag.brands && (
+                  <BrandSelector
+                    brands={tag.brands}
+                    isOpen={expandedTag === tag.id}
+                    onSelect={handleBrandSelect}
+                    onDismiss={() => setExpandedTag(null)}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
         </section>
 
         {/* Transaction List */}

@@ -22,6 +22,11 @@ class GalleonDatabase extends Dexie {
             transactions: "++id, date, category, type, createdAt",
         });
 
+        // v2: Add subCategory index for hierarchical category queries
+        this.version(2).stores({
+            transactions: "++id, date, category, subCategory, type, createdAt",
+        });
+
         // ── Migration hook: placeholder for SQLite WASM path
         // When switching to SQLite WASM, export all rows here and re-import.
         // this.version(2).upgrade(async (tx) => {

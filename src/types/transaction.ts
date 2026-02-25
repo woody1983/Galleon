@@ -24,6 +24,7 @@ export const TransactionSchema = z.object({
     amount: z.number().positive("Amount must be positive"),
     type: z.enum(["expense", "income"]),
     category: z.enum(TRANSACTION_CATEGORIES),
+    subCategory: z.string().optional().default(""),
     merchant: z.string().min(1, "Merchant name is required"),
     description: z.string().optional().default(""),
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be ISO format (YYYY-MM-DD)"),

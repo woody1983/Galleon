@@ -124,5 +124,32 @@ export function useQuickAdd() {
         });
     };
 
-    return { quickAdd };
+    /**
+     * Add a transaction with pre-selected brand data (from brand selector).
+     * Bypasses the NLP parser entirely — structured input only.
+     */
+    const quickAddWithBrand = async (opts: {
+        amount: number;
+        merchant: string;
+        category: TransactionInput["category"];
+        subCategory: string;
+    }): Promise<number | null> => {
+        if (!opts.amount || opts.amount <= 0) return null;
+
+        return addTransaction({
+            amount: opts.amount,
+            type: "expense",
+            category: opts.category,
+            subCategory: opts.subCategory,
+            merchant: opts.merchant,
+            description: `${opts.merchant} ${opts.amount}`,
+            date: todayISO(),
+            confidence: 1.0,
+            needsReview: false,
+            tags: [],
+            aiReasoning: `Brand select: ${opts.merchant} → ${opts.category} → ${opts.subCategory}`,
+        });
+    };
+
+    return { quickAdd, quickAddWithBrand };
 }
