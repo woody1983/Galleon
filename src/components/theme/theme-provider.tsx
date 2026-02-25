@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 
 type Theme = "light" | "dark" | "system";
 
@@ -24,45 +24,71 @@ const ThemeProviderContext = createContext<ThemeProviderState>({
   mounted: false,
 });
 
+// useSyncExternalStore for localStorage - React 19 recommended pattern
+function useLocalStorageTheme(storageKey: string, defaultTheme: Theme): Theme {
+  return useSyncExternalStore(
+    (callback) => {
+      const handleStorage = (e: StorageEvent) => {
+        if (e.key === storageKey) callback();
+      };
+      window.addEventListener("storage", handleStorage);
+      return () => window.removeEventListener("storage", handleStorage);
+    },
+    () => {
+      if (typeof window === "undefined") return defaultTheme;
+      return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
+    },
+    () => defaultTheme
+  );
+}
+
+// useSyncExternalStore for system color scheme
+function useSystemTheme(): "light" | "dark" {
+  return useSyncExternalStore(
+    (callback) => {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      media.addEventListener("change", callback);
+      return () => media.removeEventListener("change", callback);
+    },
+    () => {
+      if (typeof window === "undefined") return "light";
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    },
+    () => "light"
+  );
+}
+
 export function ThemeProvider({
   children,
   defaultTheme = "system",
   storageKey = "galleon-theme",
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(defaultTheme);
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
   const [mounted, setMounted] = useState(false);
+  const theme = useLocalStorageTheme(storageKey, defaultTheme);
+  const systemTheme = useSystemTheme();
+  
+  // Compute resolved theme without setState in effect
+  const resolvedTheme: "light" | "dark" = theme === "system" ? systemTheme : theme;
 
+  // Set mounted on client side using requestAnimationFrame to avoid setState in effect
   useEffect(() => {
-    setMounted(true);
-    const stored = localStorage.getItem(storageKey) as Theme | null;
-    if (stored) {
-      setThemeState(stored);
-    }
-  }, [storageKey]);
+    const rafId = requestAnimationFrame(() => {
+      setMounted(true);
+    });
+    return () => cancelAnimationFrame(rafId);
+  }, []);
 
+  // Apply theme to DOM - no setState here
   useEffect(() => {
-    if (!mounted) return;
-
     const root = window.document.documentElement;
     root.classList.remove("light", "dark");
-
-    let resolved: "light" | "dark";
-    if (theme === "system") {
-      resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
-        ? "dark"
-        : "light";
-    } else {
-      resolved = theme;
-    }
-
-    root.classList.add(resolved);
-    setResolvedTheme(resolved);
-  }, [theme, mounted]);
+    root.classList.add(resolvedTheme);
+  }, [resolvedTheme]);
 
   const setTheme = (newTheme: Theme) => {
     localStorage.setItem(storageKey, newTheme);
-    setThemeState(newTheme);
+    // Trigger storage event for cross-tab sync
+    window.dispatchEvent(new StorageEvent("storage", { key: storageKey }));
   };
 
   return (

@@ -9,6 +9,32 @@ interface CoinDropProps {
   onClose: () => void;
 }
 
+// Sound effect function - defined outside component to avoid hook issues
+function playCoinSoundEffect() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const ctx = new AudioContextClass();
+    const oscillator = ctx.createOscillator();
+    const gainNode = ctx.createGain();
+
+    oscillator.connect(gainNode);
+    gainNode.connect(ctx.destination);
+
+    oscillator.frequency.setValueAtTime(1000, ctx.currentTime);
+    oscillator.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.1);
+
+    gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+
+    oscillator.start(ctx.currentTime);
+    oscillator.stop(ctx.currentTime + 0.12);
+  } catch {
+    // Silently fail
+  }
+}
+
 export function CoinDrop({ amount = 0, isOpen, onClose }: CoinDropProps) {
   const [playSound, setPlaySound] = useState(true);
 
@@ -22,7 +48,7 @@ export function CoinDrop({ amount = 0, isOpen, onClose }: CoinDropProps) {
   useEffect(() => {
     if (isOpen) {
       if (playSound) {
-        playCoinSound();
+        playCoinSoundEffect();
       }
 
       const timer = setTimeout(() => {
@@ -32,31 +58,6 @@ export function CoinDrop({ amount = 0, isOpen, onClose }: CoinDropProps) {
       return () => clearTimeout(timer);
     }
   }, [isOpen, playSound, onClose]);
-
-  const playCoinSound = () => {
-    try {
-      const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof window.AudioContext }).webkitAudioContext;
-      if (!AudioContextClass) return;
-
-      const ctx = new AudioContextClass();
-      const oscillator = ctx.createOscillator();
-      const gainNode = ctx.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      oscillator.frequency.setValueAtTime(1000, ctx.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(500, ctx.currentTime + 0.1);
-
-      gainNode.gain.setValueAtTime(0.2, ctx.currentTime);
-      gainNode.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-
-      oscillator.start(ctx.currentTime);
-      oscillator.stop(ctx.currentTime + 0.12);
-    } catch {
-      // Silently fail
-    }
-  };
 
   return (
     <AnimatePresence>

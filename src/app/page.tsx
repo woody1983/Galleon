@@ -1,29 +1,35 @@
 "use client";
 
-import { Mic, Camera, Zap, Coffee, Car, Pizza, UtensilsCrossed } from "lucide-react";
+import { Mic, Camera, Zap, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CoinDrop } from "@/components/animation/coin-drop";
 import { useCoinDrop } from "@/hooks/use-coin-drop";
-import { useTodayTransactions, useQuickAdd } from "@/hooks/useTransactions";
+import { useTodayTransactions, useQuickAdd, useParseInput } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Transaction, TransactionCategory } from "@/types/transaction";
+import { getCategoryConfig } from "@/lib/constants";
+import type { ParseResult } from "@/services/parser/localParser";
 
-// ─── Category icon map ─────────────────────────────────────────────────────────
+// ─── Category icon with emoji ──────────────────────────────────────────────────
 const CategoryIcon = ({ category }: { category: TransactionCategory }) => {
-  const iconMap: Partial<Record<TransactionCategory, React.ComponentType<{ className?: string }>>> = {
-    餐饮: UtensilsCrossed,
-    交通: Car,
-    购物: Coffee,
-  };
-  const Icon = iconMap[category] ?? Zap;
-  return <Icon className="h-5 w-5 text-ink-secondary" />;
+  const config = getCategoryConfig(category);
+  return (
+    <span className="text-2xl" role="img" aria-label={config.name}>
+      {config.icon}
+    </span>
+  );
 };
 
 // ─── Transaction Card ──────────────────────────────────────────────────────────
 function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
+  // Truncate merchant name if too long (>20 chars)
+  const displayMerchant = tx.merchant.length > 20 
+    ? tx.merchant.slice(0, 20) + "..." 
+    : tx.merchant;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -36,7 +42,7 @@ function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
           <CategoryIcon category={tx.category} />
         </div>
         <div>
-          <h4 className="font-bold text-ink-primary dark:text-foreground">{tx.merchant}</h4>
+          <h4 className="font-bold text-ink-primary dark:text-foreground">{displayMerchant}</h4>
           <p className="text-xs text-ink-tertiary flex items-center gap-2 mt-1">
             {tx.date} · {tx.category}
             {tx.needsReview && (
@@ -62,24 +68,183 @@ function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
   );
 }
 
+// ─── Parse Preview Card ────────────────────────────────────────────────────────
+function ParsePreview({ 
+  parsed, 
+  onConfirm, 
+  onCancel 
+}: { 
+  parsed: ParseResult; 
+  onConfirm: () => void; 
+  onCancel: () => void;
+}) {
+  const config = parsed.category ? getCategoryConfig(parsed.category) : null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="mt-4 p-4 bg-galleon-gold/5 border border-galleon-gold/20 rounded-xl"
+    >
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-mono uppercase tracking-wider text-galleon-gold">Preview</span>
+        {parsed.needsReview && (
+          <span className="text-[10px] bg-spell-danger/10 text-spell-danger px-2 py-0.5 rounded-full">
+            Needs Review
+          </span>
+        )}
+      </div>
+      
+      <div className="flex items-center gap-4 mb-4">
+        {config && (
+          <div className="w-10 h-10 flex items-center justify-center rounded-full bg-background border border-border">
+            <span className="text-xl">{config.icon}</span>
+          </div>
+        )}
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-ink-primary">
+              {parsed.merchant || "Unknown"}
+            </span>
+            <span className="text-xs text-ink-tertiary">·</span>
+            <span className="text-xs text-ink-tertiary">{parsed.category || "其他"}</span>
+          </div>
+          <div className="flex items-center gap-3 mt-1">
+            <span className={cn(
+              "font-mono font-bold",
+              parsed.type === "expense" ? "text-spell-danger" : "text-spell-success"
+            )}>
+              {parsed.type === "expense" ? "-" : "+"}{parsed.amount?.toFixed(0) || "?"} ¥
+            </span>
+            {parsed.parsedDate && (
+              <span className="text-xs text-ink-tertiary">{parsed.parsedDate}</span>
+            )}
+            <span className="text-xs text-ink-tertiary">
+              Confidence: {Math.round(parsed.confidence * 100)}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex gap-2">
+        <Button 
+          onClick={onConfirm}
+          size="sm"
+          className="flex-1 bg-galleon-gold hover:bg-galleon-gold-dark text-white rounded-full"
+        >
+          <Check className="h-4 w-4 mr-1" />
+          Confirm
+        </Button>
+        <Button 
+          onClick={onCancel}
+          variant="outline"
+          size="sm"
+          className="rounded-full"
+        >
+          <X className="h-4 w-4 mr-1" />
+          Cancel
+        </Button>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Daily Summary Card ────────────────────────────────────────────────────────
+function DailySummary({ 
+  income, 
+  expense, 
+  net 
+}: { 
+  income: number; 
+  expense: number; 
+  net: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="grid grid-cols-3 gap-4 p-4 bg-card border border-border rounded-xl mb-8"
+    >
+      <div className="text-center">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-ink-tertiary mb-1">Income</p>
+        <p className="font-mono font-bold text-spell-success">+{income.toFixed(0)} ¥</p>
+      </div>
+      <div className="text-center border-x border-border/50">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-ink-tertiary mb-1">Expense</p>
+        <p className="font-mono font-bold text-spell-danger">-{expense.toFixed(0)} ¥</p>
+      </div>
+      <div className="text-center">
+        <p className="text-[10px] font-mono uppercase tracking-wider text-ink-tertiary mb-1">Net</p>
+        <p className={cn(
+          "font-mono font-bold",
+          net >= 0 ? "text-spell-success" : "text-spell-danger"
+        )}>
+          {net >= 0 ? "+" : ""}{net.toFixed(0)} ¥
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
 // ─── Today Page ────────────────────────────────────────────────────────────────
 export default function TodayPage() {
   const [input, setInput] = useState("");
+  const [preview, setPreview] = useState<ParseResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { isOpen, amount, trigger, close } = useCoinDrop();
-  const { transactions, total, isLoading } = useTodayTransactions();
+  const { transactions, total, isLoading, income, expense } = useTodayTransactions();
   const { quickAdd } = useQuickAdd();
+  const { parseInput } = useParseInput();
+
+  // Parse input on change (debounced)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (input.trim()) {
+        const result = parseInput(input);
+        setPreview(result);
+      } else {
+        setPreview(null);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [input, parseInput]);
+
+  const handleConfirm = async () => {
+    if (!preview || isSubmitting) return;
+    
+    setIsSubmitting(true);
+    try {
+      const id = await quickAdd(input);
+      if (id && preview.amount) {
+        trigger(preview.amount);
+      }
+      setInput("");
+      setPreview(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setPreview(null);
+    setInput("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-
-    const amountMatch = input.match(/\d+(\.\d+)?/);
-    const parsedAmount = amountMatch ? parseFloat(amountMatch[0]) : 0;
-
-    await quickAdd(input);
-    if (parsedAmount > 0) trigger(parsedAmount);
-    setInput("");
+    if (!input.trim() || !preview) return;
+    await handleConfirm();
   };
+
+  // Get today's date formatted
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("en-US", { 
+    weekday: "short", 
+    month: "short", 
+    day: "numeric" 
+  });
 
   return (
     <div className="relative min-h-screen pt-12 pb-24 px-6 md:px-12 lg:px-16">
@@ -93,7 +258,7 @@ export default function TodayPage() {
               Each Galleon Counts
             </p>
             <h2 className="text-4xl font-bold font-display tracking-tight text-ink-primary dark:text-foreground">
-              Thu, Feb 26
+              {dateStr}
             </h2>
           </div>
           <div className="text-right">
@@ -107,6 +272,9 @@ export default function TodayPage() {
           </div>
         </header>
 
+        {/* Daily Summary */}
+        <DailySummary income={income} expense={expense} net={total} />
+
         {/* Hero Input */}
         <section className="mb-12">
           <form onSubmit={handleSubmit} className="relative group">
@@ -115,22 +283,35 @@ export default function TodayPage() {
               <Input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="今天午餐35元..."
+                placeholder="今天花了什么？"
                 className="h-12 border-none shadow-none text-xl font-body bg-transparent focus-visible:ring-0 px-2"
               />
+              
+              {/* Parse Preview */}
+              <AnimatePresence>
+                {preview && (
+                  <ParsePreview 
+                    parsed={preview} 
+                    onConfirm={handleConfirm}
+                    onCancel={handleCancel}
+                  />
+                )}
+              </AnimatePresence>
+
               <div className="flex items-center justify-between pt-2 border-t border-border/50">
                 <div className="flex gap-2">
-                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-ink-tertiary hover:text-ink-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-full" disabled title="语音输入 — Phase 2">
+                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-ink-tertiary hover:text-ink-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-full" disabled title="语音输入 — Phase 3">
                     <Mic className="h-5 w-5 stroke-[1.5px]" />
                   </Button>
-                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-ink-tertiary hover:text-ink-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-full" disabled title="拍照识别 — Phase 2">
+                  <Button type="button" variant="ghost" size="icon" className="h-10 w-10 text-ink-tertiary hover:text-ink-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-full" disabled title="拍照识别 — Phase 3">
                     <Camera className="h-5 w-5 stroke-[1.5px]" />
                   </Button>
                 </div>
                 <Button
                   type="submit"
                   size="sm"
-                  className="bg-ink-primary text-parchment hover:bg-ink-secondary dark:bg-foreground dark:text-midnight rounded-full px-6 py-5 transition-all active:scale-95"
+                  disabled={!preview || isSubmitting}
+                  className="bg-ink-primary text-parchment hover:bg-ink-secondary dark:bg-foreground dark:text-midnight rounded-full px-6 py-5 transition-all active:scale-95 disabled:opacity-50"
                 >
                   <Zap className="h-4 w-4 mr-2 fill-current" />
                   <span className="font-medium tracking-tight">Record</span>
@@ -142,10 +323,10 @@ export default function TodayPage() {
 
         {/* Quick Tags */}
         <section className="flex flex-wrap gap-2 mb-16 justify-center opacity-60 hover:opacity-100 transition-opacity">
-          {["☕ Coffee", "🚕 Taxi", "🍔 Food", "🛍️ Shop"].map((tag) => (
+          {["☕ 咖啡", "🚕 打车", "🍔 午餐", "🛍️ 购物"].map((tag) => (
             <button
               key={tag}
-              onClick={() => setInput(tag.split(" ")[1])}
+              onClick={() => setInput(tag)}
               className="px-4 py-1.5 rounded-full border border-border text-[11px] font-medium uppercase tracking-wider hover:bg-ink-primary hover:text-parchment transition-all duration-300"
             >
               {tag}
@@ -157,7 +338,7 @@ export default function TodayPage() {
         <section className="space-y-8">
           <div className="flex items-center justify-between px-2">
             <h3 className="text-xs font-mono uppercase tracking-[0.2em] text-ink-tertiary">
-              Today's Transactions
+              Today&apos;s Transactions
             </h3>
             <span className={cn(
               "text-xs font-mono",

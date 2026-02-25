@@ -9,17 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useEffect, useState } from "react";
 
 export function ThemeToggle() {
-  const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
+  const { theme, setTheme, mounted } = useTheme();
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // Prevent hydration mismatch
+  // Prevent hydration mismatch - use mounted from context instead of local state
   if (!mounted) {
     return (
       <Button variant="ghost" size="icon">
