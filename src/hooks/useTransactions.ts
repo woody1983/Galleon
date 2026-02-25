@@ -7,7 +7,7 @@ import { useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, getTodayRange } from "@/lib/db";
 import { buildTransaction, todayISO } from "@/types/transaction";
-import type { Transaction, TransactionInput } from "@/types/transaction";
+import type { Transaction, TransactionInput, TransactionCategory } from "@/types/transaction";
 import { parseNaturalLanguage, type ParseResult, getGenericMerchantName } from "@/services/parser/localParser";
 
 // ─── Hook: All transactions for today (live) ───────────────────────────────────
@@ -161,4 +161,85 @@ export function useQuickAdd() {
     };
 
     return { quickAdd, quickAddWithBrand };
+}
+
+// ─── Hook: All transactions (live, ordered by date descending) ─────────────────
+
+export function useAllTransactions() {
+    const transactions = useLiveQuery(
+        () => db.transactions.orderBy("date").reverse().toArray()
+    );
+    return {
+        transactions: transactions ?? [],
+        isLoading: transactions === undefined,
+    };
+}
+
+// ─── Hook: Monthly stats (aggregated via Dexie date index) ────────────────────
+
+export interface MonthlyStats {
+    income: number;
+    expense: number;
+    net: number;
+    top3Categories: { category: TransactionCategory; amount: number }[];
+    dailyAverage: number;
+    isLoading: boolean;
+}
+
+export function useMonthlyStats(year: number, month: number): MonthlyStats {
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    // End: first day of next month (exclusive)
+    const endYear = month === 12 ? year + 1 : year;
+    const endMonth = month === 12 ? 1 : month + 1;
+    const endDate = `${endYear}-${String(endMonth).padStart(2, "0")}-01`;
+
+    const transactions = useLiveQuery(
+        () =>
+            db.transactions
+                .where("date")
+                .between(startDate, endDate, true, false)
+                .toArray(),
+        [startDate, endDate]
+    );
+
+    const txs = transactions ?? [];
+
+    // Days elapsed in month (for daily average calculation)
+    const today = new Date();
+    const isCurrentMonth =
+        today.getFullYear() === year && today.getMonth() + 1 === month;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const daysElapsed = isCurrentMonth ? today.getDate() : daysInMonth;
+
+    let income = 0;
+    let expense = 0;
+    const categoryTotals: Partial<Record<TransactionCategory, number>> = {};
+
+    for (const tx of txs) {
+        if (tx.type === "income") {
+            income += tx.amount;
+        } else {
+            expense += tx.amount;
+            categoryTotals[tx.category] =
+                (categoryTotals[tx.category] ?? 0) + tx.amount;
+        }
+    }
+
+    const top3Categories = (
+        Object.entries(categoryTotals) as [TransactionCategory, number][]
+    )
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([category, amount]) => ({ category, amount }));
+
+    const dailyAverage = daysElapsed > 0 ? expense / daysElapsed : 0;
+
+    return {
+        income,
+        expense,
+        net: income - expense,
+        top3Categories,
+        dailyAverage,
+        isLoading: transactions === undefined,
+    };
 }
