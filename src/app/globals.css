@@ -5,10 +5,38 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Galleon Colors */
+  --color-galleon-gold: var(--galleon-gold);
+  --color-galleon-gold-light: var(--galleon-gold-light);
+  --color-galleon-gold-dark: var(--galleon-gold-dark);
+  --color-gringotts-silver: var(--gringotts-silver);
+  --color-gringotts-silver-dark: var(--gringotts-silver-dark);
+  --color-ink-primary: var(--ink-primary);
+  --color-ink-secondary: var(--ink-secondary);
+  --color-ink-tertiary: var(--ink-tertiary);
+  --color-parchment: var(--parchment);
+  --color-parchment-dark: var(--parchment-dark);
+  --color-midnight: var(--midnight);
+  --color-spell-success: var(--spell-success);
+  --color-spell-danger: var(--spell-danger);
+  --color-spell-info: var(--spell-info);
+  
+  /* Spacing */
+  --spacing-xs: var(--space-xs);
+  --spacing-sm: var(--space-sm);
+  --spacing-md: var(--space-md);
+  --spacing-lg: var(--space-lg);
+  --spacing-xl: var(--space-xl);
+  --spacing-2xl: var(--space-2xl);
+  --spacing-3xl: var(--space-3xl);
+  --spacing-4xl: var(--space-4xl);
+  
+  /* Base */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter), "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-serif: var(--font-playfair), "Noto Serif SC", "Songti SC", serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,8 +76,50 @@
 }
 
 :root {
+  /* Galleon Theme - Gold & Alchemy */
+  /* Gold Spectrum */
+  --galleon-gold: #D4AF37;
+  --galleon-gold-light: #E8C547;
+  --galleon-gold-dark: #B8960B;
+  
+  /* Silver Spectrum */
+  --gringotts-silver: #C0C0C0;
+  --gringotts-silver-dark: #A0A0A0;
+  
+  /* Ink/Text Hierarchy */
+  --ink-primary: #1A1A1A;
+  --ink-secondary: #4A4A4A;
+  --ink-tertiary: #7A7A7A;
+  
+  /* Backgrounds */
+  --parchment: #FAF8F3;
+  --parchment-dark: #F0EDE5;
+  --midnight: #1A1A2E;
+  
+  /* Status Colors */
+  --spell-success: #22C55E;
+  --spell-danger: #EF4444;
+  --spell-info: #3B82F6;
+  
+  /* Spacing System (8px base) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+  --space-4xl: 96px;
+  
+  /* Border Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 9999px;
+  
+  /* shadcn defaults */
   --radius: 0.625rem;
-  --background: oklch(1 0 0);
+  --background: var(--parchment);
   --foreground: oklch(0.147 0.004 49.25);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.147 0.004 49.25);
@@ -83,8 +153,14 @@
 }
 
 .dark {
-  --background: oklch(0.147 0.004 49.25);
-  --foreground: oklch(0.985 0.001 106.423);
+  /* Galleon Dark Mode */
+  --background: var(--midnight);
+  --foreground: var(--parchment);
+  
+  /* Dark mode ink colors */
+  --ink-primary: #FAFAFA;
+  --ink-secondary: #E0E0E0;
+  --ink-tertiary: #A0A0A0;
   --card: oklch(0.216 0.006 56.043);
   --card-foreground: oklch(0.985 0.001 106.423);
   --popover: oklch(0.216 0.006 56.043);
@@ -121,6 +197,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-parchment text-ink-primary;
+    font-feature-settings: "liga" 1, "calt" 1;
   }
 }
