@@ -1,11 +1,11 @@
 "use client";
 
-import { Mic, Camera, Zap, Check, X } from "lucide-react";
+import { Mic, Camera, Zap, Check, X, Trash2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CoinDrop } from "@/components/animation/coin-drop";
 import { useCoinDrop } from "@/hooks/use-coin-drop";
-import { useTodayTransactions, useQuickAdd, useParseInput } from "@/hooks/useTransactions";
+import { useTodayTransactions, useQuickAdd, useParseInput, useTransactions } from "@/hooks/useTransactions";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect, useRef } from "react";
@@ -14,6 +14,7 @@ import { getCategoryConfig } from "@/lib/constants";
 import type { ParseResult } from "@/services/parser/localParser";
 import { QUICK_TAGS, type BrandConfig, type QuickTagConfig } from "@/lib/brands";
 import { BrandSelector } from "@/components/galleon/brand-selector";
+import { CategorySelectorCompact } from "@/components/category/category-selector";
 
 // ─── Category icon with emoji ──────────────────────────────────────────────────
 const CategoryIcon = ({ category }: { category: TransactionCategory }) => {
@@ -26,8 +27,17 @@ const CategoryIcon = ({ category }: { category: TransactionCategory }) => {
 };
 
 // ─── Transaction Card ──────────────────────────────────────────────────────────
-function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
-  // Truncate merchant name if too long (>20 chars)
+function TransactionCard({
+  tx,
+  index,
+  onDelete,
+  onEdit,
+}: {
+  tx: Transaction;
+  index: number;
+  onDelete: (id: number) => void;
+  onEdit: (tx: Transaction) => void;
+}) {
   const displayMerchant = tx.merchant.length > 20
     ? tx.merchant.slice(0, 20) + "..."
     : tx.merchant;
@@ -36,10 +46,16 @@ function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -20 }}
       transition={{ delay: index * 0.06 }}
       className="flex items-center justify-between p-5 bg-card/40 border border-border/50 rounded-xl hover:bg-card hover:border-border transition-all group"
     >
-      <div className="flex items-center gap-5">
+      {/* Card body — click to edit */}
+      <button
+        onClick={() => onEdit(tx)}
+        className="flex items-center gap-5 flex-1 text-left"
+        aria-label={`编辑 ${tx.merchant} 记录`}
+      >
         <div className="w-12 h-12 flex items-center justify-center rounded-full bg-background border border-border group-hover:scale-110 transition-transform">
           <CategoryIcon category={tx.category} />
         </div>
@@ -64,13 +80,176 @@ function TransactionCard({ tx, index }: { tx: Transaction; index: number }) {
             )}
           </p>
         </div>
+      </button>
+
+      {/* Amount + delete */}
+      <div className="flex items-center gap-3 ml-4 shrink-0">
+        <p className={cn(
+          "font-mono font-bold text-lg",
+          tx.type === "expense" ? "text-spell-danger" : "text-spell-success"
+        )}>
+          {tx.type === "expense" ? "-" : "+"}{tx.amount.toFixed(0)} ¥
+        </p>
+        <button
+          onClick={() => tx.id !== undefined && onDelete(tx.id)}
+          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full hover:bg-spell-danger/10 text-ink-tertiary hover:text-spell-danger transition-all"
+          aria-label={`删除 ${tx.merchant} 记录`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </div>
-      <p className={cn(
-        "font-mono font-bold text-lg",
-        tx.type === "expense" ? "text-spell-danger" : "text-spell-success"
-      )}>
-        {tx.type === "expense" ? "-" : "+"}{tx.amount.toFixed(0)} ¥
-      </p>
+    </motion.div>
+  );
+}
+
+// ─── Edit Modal ────────────────────────────────────────────────────────────────
+function EditModal({
+  tx,
+  onSave,
+  onClose,
+}: {
+  tx: Transaction;
+  onSave: (id: number, updates: Partial<Transaction>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [amount, setAmount] = useState(tx.amount.toString());
+  const [merchant, setMerchant] = useState(tx.merchant);
+  const [category, setCategory] = useState<TransactionCategory>(tx.category);
+  const [type, setType] = useState<"expense" | "income">(tx.type);
+  const [date, setDate] = useState(tx.date);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const isValid = parseFloat(amount) > 0 && merchant.trim().length > 0;
+
+  const handleSave = async () => {
+    if (!isValid || isSaving || tx.id === undefined) return;
+    setIsSaving(true);
+    await onSave(tx.id, {
+      amount: parseFloat(amount),
+      merchant: merchant.trim(),
+      category,
+      type,
+      date,
+      updatedAt: new Date().toISOString(),
+    });
+    onClose();
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+      />
+
+      {/* Sheet */}
+      <motion.div
+        initial={{ y: 60, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 60, opacity: 0 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
+        className="relative w-full max-w-lg bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl p-6 space-y-5"
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <h3 className="font-bold text-ink-primary dark:text-foreground flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-galleon-gold" />
+            编辑记录
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/5 text-ink-tertiary"
+            aria-label="关闭"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Type toggle */}
+        <div className="flex gap-2">
+          {(["expense", "income"] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setType(t)}
+              className={cn(
+                "flex-1 py-2 rounded-full text-sm font-medium transition-all",
+                type === t
+                  ? t === "expense"
+                    ? "bg-spell-danger text-white"
+                    : "bg-spell-success text-white"
+                  : "border border-border text-ink-tertiary hover:border-ink-secondary"
+              )}
+            >
+              {t === "expense" ? "支出" : "收入"}
+            </button>
+          ))}
+        </div>
+
+        {/* Amount */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-mono uppercase tracking-widest text-ink-tertiary">金额</label>
+          <Input
+            type="number"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            placeholder="0"
+            className="text-2xl font-mono font-bold h-14 border-border"
+          />
+        </div>
+
+        {/* Merchant */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-mono uppercase tracking-widest text-ink-tertiary">商户</label>
+          <Input
+            value={merchant}
+            onChange={(e) => setMerchant(e.target.value)}
+            placeholder="商户名称"
+            className="h-10 border-border"
+          />
+        </div>
+
+        {/* Date */}
+        <div className="space-y-1">
+          <label className="text-[10px] font-mono uppercase tracking-widest text-ink-tertiary">日期</label>
+          <Input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-10 border-border"
+          />
+        </div>
+
+        {/* Category */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-mono uppercase tracking-widest text-ink-tertiary">分类</label>
+          <CategorySelectorCompact value={category} onChange={setCategory} />
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-3 pt-2">
+          <Button
+            onClick={onClose}
+            variant="outline"
+            className="flex-1 rounded-full"
+          >
+            取消
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={!isValid || isSaving}
+            className="flex-1 bg-galleon-gold hover:bg-galleon-gold-dark text-white rounded-full disabled:opacity-50"
+          >
+            <Check className="h-4 w-4 mr-1" />
+            保存
+          </Button>
+        </div>
+      </motion.div>
     </motion.div>
   );
 }
@@ -201,10 +380,13 @@ export default function TodayPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedBrand, setSelectedBrand] = useState<BrandConfig | null>(null);
   const [expandedTag, setExpandedTag] = useState<string | null>(null);
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const { isOpen, amount, trigger, close } = useCoinDrop();
   const { transactions, total, isLoading, income, expense } = useTodayTransactions();
   const { quickAdd, quickAddWithBrand } = useQuickAdd();
   const { parseInput } = useParseInput();
+  const { deleteTransaction, updateTransaction } = useTransactions();
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Parse input on change (debounced)
@@ -238,10 +420,16 @@ export default function TodayPage() {
           category: selectedBrand.category,
           subCategory: selectedBrand.subCategory,
         });
-        if (id) trigger(parsedAmount);
-        setInput("");
-        setPreview(null);
-        setSelectedBrand(null);
+        if (id) {
+          trigger(parsedAmount);
+          setInput("");
+          setPreview(null);
+          setSelectedBrand(null);
+        } else {
+          // Duplicate detected
+          setIsDuplicate(true);
+          setTimeout(() => setIsDuplicate(false), 3000);
+        }
       } finally {
         setIsSubmitting(false);
       }
@@ -255,12 +443,24 @@ export default function TodayPage() {
       const id = await quickAdd(input);
       if (id && preview.amount) {
         trigger(preview.amount);
+        setInput("");
+        setPreview(null);
+      } else if (id === null) {
+        // Duplicate detected
+        setIsDuplicate(true);
+        setTimeout(() => setIsDuplicate(false), 3000);
       }
-      setInput("");
-      setPreview(null);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleDelete = async (id: number) => {
+    await deleteTransaction(id);
+  };
+
+  const handleUpdate = async (id: number, updates: Partial<Transaction>) => {
+    await updateTransaction(id, updates);
   };
 
   const handleCancel = () => {
@@ -311,6 +511,17 @@ export default function TodayPage() {
     <div className="relative min-h-screen pt-12 pb-24 px-6 md:px-12 lg:px-16">
       <CoinDrop isOpen={isOpen} amount={amount} onClose={close} />
 
+      {/* Edit Modal */}
+      <AnimatePresence>
+        {editingTx && (
+          <EditModal
+            tx={editingTx}
+            onSave={handleUpdate}
+            onClose={() => setEditingTx(null)}
+          />
+        )}
+      </AnimatePresence>
+
       <div className="mx-auto max-w-5xl">
         {/* Header */}
         <header className="flex items-end justify-between mb-16 px-2">
@@ -338,6 +549,19 @@ export default function TodayPage() {
 
         {/* Hero Input */}
         <section className="mb-12">
+          {/* Duplicate warning */}
+          <AnimatePresence>
+            {isDuplicate && (
+              <motion.p
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="mb-3 text-center text-sm text-spell-danger font-body"
+              >
+                5秒内已有相同记录，跳过重复提交 🪙
+              </motion.p>
+            )}
+          </AnimatePresence>
           <form onSubmit={handleSubmit} className="relative group">
             <div className="absolute -inset-0.5 bg-gradient-to-r from-galleon-gold/20 to-galleon-gold-dark/20 rounded-xl blur opacity-0 group-hover:opacity-100 transition duration-1000 group-focus-within:opacity-100" />
             <div className="relative flex flex-col gap-4 p-4 bg-card border border-border rounded-xl shadow-sm">
@@ -481,7 +705,13 @@ export default function TodayPage() {
                 </motion.div>
               ) : (
                 transactions.map((tx: Transaction, i: number) => (
-                  <TransactionCard key={tx.id} tx={tx} index={i} />
+                  <TransactionCard
+                    key={tx.id}
+                    tx={tx}
+                    index={i}
+                    onDelete={handleDelete}
+                    onEdit={setEditingTx}
+                  />
                 ))
               )}
             </AnimatePresence>

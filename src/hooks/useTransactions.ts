@@ -52,7 +52,16 @@ export function useTodayTransactions() {
 // ─── Hook: CRUD operations ─────────────────────────────────────────────────────
 
 export function useTransactions() {
-    const addTransaction = async (input: TransactionInput): Promise<number> => {
+    const addTransaction = async (input: TransactionInput): Promise<number | null> => {
+        // Duplicate detection: same amount + merchant within 5 seconds
+        const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
+        const duplicate = await db.transactions
+            .where("createdAt")
+            .aboveOrEqual(fiveSecondsAgo)
+            .filter(tx => tx.amount === input.amount && tx.merchant === input.merchant)
+            .first();
+        if (duplicate) return null;
+
         const tx = buildTransaction(input);
         const id = await db.transactions.add(tx as Transaction);
         return id as number;
