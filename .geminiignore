@@ -1,0 +1,33 @@
+# 依赖包（绝对禁止 AI 读取，它们已经存在于 Claude 的预训练知识库里了）
+node_modules/
+
+# 构建产物
+dist/
+build/
+.next/
+out/
+
+# 环境变量与密钥（为了安全，也为了省 Token）
+.env*
+*.local
+auth.config.js
+
+# 缓存与日志
+.npm
+.eslintcache
+*.log
+.turbo/
+
+# 版本控制与 IDE 内部文件
+.git/
+.antigravity/
+.vscode/
+.idea/
+
+# 媒体文件（AI 读这些二进制文件非常烧 Token 且没意义）
+public/assets/
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.mp4
