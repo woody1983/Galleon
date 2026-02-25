@@ -59,7 +59,7 @@ export function NavShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 lg:pb-0 pb-20">
+      <main className="w-full min-w-0 lg:ml-64 lg:pb-0 pb-20">
         {children}
       </main>
 

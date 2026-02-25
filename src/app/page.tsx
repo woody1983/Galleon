@@ -13,37 +13,36 @@ export default function TodayPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    // Placeholder for Phase 1 - just trigger animation
     const parsedAmount = parseFloat(input.replace(/[^\d.]/g, "")) || 35;
     trigger(parsedAmount);
     setInput("");
   };
 
   return (
-    <div className="min-h-screen p-4 lg:p-8">
+    <div className="p-4 lg:p-8">
       <CoinDrop isOpen={isOpen} amount={amount} onClose={close} />
       
-      <div className="mx-auto max-w-2xl space-y-6">
+      <div className="mx-auto w-full" style={{ maxWidth: "672px" }}>
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between mb-6">
           <div>
-            <p className="text-sm text-ink-tertiary">2026年2月24日 周二</p>
-            <h1 className="text-2xl font-bold text-ink-primary">今天花了什么？</h1>
+            <p className="text-sm text-ink-tertiary mb-1">2026年2月24日 周二</p>
+            <h1 className="text-2xl font-bold text-ink-primary whitespace-nowrap">今天花了什么？</h1>
           </div>
           <div className="text-right">
-            <p className="text-sm text-ink-tertiary">今日支出</p>
+            <p className="text-sm text-ink-tertiary mb-1">今日支出</p>
             <p className="text-2xl font-bold text-galleon-gold">¥0.00</p>
           </div>
         </div>
 
         {/* Hero Input */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="relative">
+        <form onSubmit={handleSubmit} className="mb-4">
+          <div className="relative w-full">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="例如：星巴克 35，或 昨天打车28"
-              className="h-14 pr-32 text-lg"
+              className="h-14 pr-32 text-lg w-full"
             />
             <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-1">
               <Button
@@ -78,7 +77,7 @@ export default function TodayPage() {
         </form>
 
         {/* Quick Actions */}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 mb-6">
           {["☕ 咖啡", "🚕 打车", "🍔 外卖", "🛒 超市"].map((item) => (
             <Button
               key={item}
@@ -93,9 +92,9 @@ export default function TodayPage() {
         </div>
 
         {/* Demo Section */}
-        <div className="rounded-lg border border-border bg-parchment-dark/30 p-6 dark:bg-midnight/30">
+        <div className="rounded-lg border border-border bg-parchment-dark/30 p-6 dark:bg-midnight/30 mb-6">
           <h3 className="mb-4 text-sm font-medium text-ink-tertiary">🪙 金币动画测试</h3>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button onClick={() => trigger(35)} variant="outline" size="sm">
               测试 ¥35
             </Button>
@@ -109,8 +108,8 @@ export default function TodayPage() {
         </div>
 
         {/* Today's Transactions */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-medium text-ink-tertiary">今日记录</h2>
+        <div>
+          <h2 className="text-sm font-medium text-ink-tertiary mb-3">今日记录</h2>
           <div className="rounded-lg border border-border bg-parchment-dark/30 p-8 text-center dark:bg-midnight/30">
             <p className="text-ink-tertiary">还没有记录，开始记一笔吧 🪙</p>
           </div>
