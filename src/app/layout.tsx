@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Playfair_Display, JetBrains_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { NavShell } from "@/components/layout/nav-shell";
 import "./globals.css";
 
 const inter = Inter({
@@ -25,6 +26,12 @@ export const metadata: Metadata = {
   title: "Galleon - 智能记账",
   description: "先做出让人上瘾的情感闭环，再逐步叠加智能。",
   keywords: ["记账", "财务管理", "AI记账", "隐私优先"],
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Galleon",
+  },
 };
 
 export const viewport: Viewport = {
@@ -50,7 +57,7 @@ export default function RootLayout({
         }}
       >
         <ThemeProvider defaultTheme="system" storageKey="galleon-theme">
-          {children}
+          <NavShell>{children}</NavShell>
         </ThemeProvider>
       </body>
     </html>
